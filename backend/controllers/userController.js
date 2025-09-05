@@ -9,53 +9,68 @@ import refreshAccessToken from '../utils/refreshAccessToken.js';
 import UserRefreshTokenModel from '../models/UserRefreshToken.js';
 import jwt from 'jsonwebtoken';
 import transporter from '../config/emailConfig.js';
+
 class UserController {
 
-//user Registeration 
-
-    static userRegistration = async (req, res)=>{
-        try{
-            const { name, email, password, password_confirmation } = req.body;
-
-            if (!name || !email || !password || !password_confirmation) {
-                return res.status(400).json({ status: "failed", message: "All fields are required" });
-            }
-
-            if (password !== password_confirmation) {
-                return res.status(400).json({ status: "failed", message: "Password and Confirm Password don't match" });
-            }
-
-            const existingUser = await UserModel.findOne({ email });
-            
-            if (existingUser) {
-                return res.status(409).json({ status: "failed", message: "Email already exists" });
-            }
-            // generate salt and hash password
-            const salt = await bcrypt.genSalt(Number(process.env.SALT));
-            const hashedPassword = await bcrypt.hash(password, salt);
-            
-            const newUser = await new UserModel({ name, email, password: hashedPassword }).save();
-            
-            sendEmailVerificationOTP(req, newUser);
-            
-            res.status(201).json({
-            status: "success",
-            message: "Registration Success",
-            user: { id: newUser._id, email: newUser.email }
-            });
-
-        }catch(error){
-            logger.error('Error during user registration:', error);
-            res.status(500).json({status: "failed", message: "unable to Register, please try again later"});
-        }
-    }
-
-
-    //user email verification 
-
-    static verifyEmail = async (req, res) => {
+  //user Registeration 
+  static userRegistration = async (req, res) => {
     try {
+      console.log('🔵 === REGISTRATION REQUEST ===');
+      console.log('🔵 Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('🔵 Body:', req.body);
 
+      const { name, email, password, password_confirmation } = req.body;
+
+      if (!name || !email || !password || !password_confirmation) {
+        console.log('❌ Missing fields');
+        return res.status(400).json({ status: "failed", message: "All fields are required" });
+      }
+
+      if (password !== password_confirmation) {
+        console.log('❌ Password mismatch');
+        return res.status(400).json({ status: "failed", message: "Password and Confirm Password don't match" });
+      }
+
+      const existingUser = await UserModel.findOne({ email });
+      
+      if (existingUser) {
+        console.log('❌ Email already exists:', email);
+        return res.status(409).json({ status: "failed", message: "Email already exists" });
+      }
+
+      // generate salt and hash password
+      const salt = await bcrypt.genSalt(Number(process.env.SALT));
+      const hashedPassword = await bcrypt.hash(password, salt);
+      
+      // ✅ AUTO-VERIFY USERS FOR TESTING - MODIFIED THIS LINE
+      const newUser = await new UserModel({ 
+        name, 
+        email, 
+        password: hashedPassword,
+        is_verified: true // ✅ ADDED AUTO-VERIFICATION
+      }).save();
+      
+      console.log('✅ User created and auto-verified:', newUser.email);
+      
+      // ✅ COMMENTED OUT EMAIL VERIFICATION FOR TESTING
+      // sendEmailVerificationOTP(req, newUser);
+
+      res.status(201).json({
+        status: "success",
+        message: "Registration Success",
+        user: { id: newUser._id, email: newUser.email }
+      });
+
+    } catch (error) {
+      console.log('❌ Registration error:', error);
+      logger.error('Error during user registration:', error);
+      res.status(500).json({status: "failed", message: "unable to Register, please try again later"});
+    }
+  }
+
+  //user email verification 
+  static verifyEmail = async (req, res) => {
+    try {
       // Extract request body parameters
       const { email, otp } = req.body;
 
@@ -77,7 +92,7 @@ class UserController {
       }
 
       // Check if there is a matching email verification OTP
-      const emailVerification = await EmailVerificationModel.findOne({ userId: existingUser._id, otp});
+      const emailVerification = await EmailVerificationModel.findOne({ userId: existingUser._id, otp });
       if (!emailVerification) {
         if (!existingUser.is_verified) {
           logger.info('Resending email verification OTP:', existingUser);
@@ -90,7 +105,7 @@ class UserController {
       // Check if OTP is expired
       const currentTime = new Date();
       // 15 * 60 * 1000 calculates the expiration period in milliseconds(15 minutes).
-      
+
       const expirationTime = new Date(emailVerification.createdAt.getTime() + 15 * 60 * 1000);
       if (currentTime > expirationTime) {
         // OTP expired, send new OTP
@@ -104,7 +119,7 @@ class UserController {
 
       // Delete email verification document
       await EmailVerificationModel.deleteMany({ userId: existingUser._id });
-      
+
       return res.status(200).json({ status: "success", message: "Email verified successfully" });
     } catch (error) {
       logger.error('Error verifying email:', error);
@@ -113,38 +128,58 @@ class UserController {
   }
 
   //user login attempt with acess token and refresh token
-
   static userLogin = async (req, res) => {
     try {
+      console.log('🔵 === LOGIN REQUEST STARTED ===');
+      console.log('🔵 URL:', req.url);
+      console.log('🔵 Method:', req.method);
+      console.log('🔵 Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('🔵 Cookies:', req.cookies);
+      console.log('🔵 Body:', req.body);
+
       const { email, password } = req.body
       // Check if email and password are provided
       if (!email || !password) {
+        console.log('❌ Missing email or password');
         return res.status(400).json({ status: "failed", message: "Email and password are required" });
       }
       // Find user by email
       const user = await UserModel.findOne({ email });
+      console.log('🔵 User found:', user ? user.email : 'NOT FOUND');
 
       // Check if user exists
       if (!user) {
+        console.log('❌ User not found');
         return res.status(404).json({ status: "failed", message: "Invalid Email or Password" });
       }
 
-      // Check if user exists
+      // Check if user is verified
       if (!user.is_verified) {
+        console.log('❌ User not verified');
         return res.status(401).json({ status: "failed", message: "Your account is not verified" });
       }
 
       // Compare passwords / Check Password
+      console.log('🔵 Comparing passwords...');
       const isMatch = await bcrypt.compare(password, user.password);
+      console.log('🔵 Password match result:', isMatch);
+      
       if (!isMatch) {
+        console.log('❌ Password mismatch');
+        console.log('🔵 Input password:', password);
+        console.log('🔵 Stored hash:', user.password);
         return res.status(401).json({ status: "failed", message: "Invalid email or password" });
       }
 
+      console.log('✅ Password matched, generating tokens...');
+      
       // Generate tokens
       const { accessToken, refreshToken, accessTokenExp, refreshTokenExp } = await generateTokens(user)
 
       // Set Cookies
       setTokensCookies(res, accessToken, refreshToken, accessTokenExp, refreshTokenExp)
+
+      console.log('✅ Login successful, tokens generated and cookies set');
 
       // Send success response with tokens
       res.status(200).json({
@@ -160,14 +195,14 @@ class UserController {
       logger.info("User login successful");
 
     } catch (error) {
+      console.log('❌ LOGIN ERROR:', error);
       logger.error('Error during user login:', error);
       res.status(500).json({ status: "failed", message: "Unable to login, please try again later" });
     }
   }
 
   //Get new acess token or refresh token 
-
-   static getNewAccessToken = async (req, res) => {
+  static getNewAccessToken = async (req, res) => {
     try {
       // Get new access token using Refresh Token
       const { newAccessToken, newRefreshToken, newAccessTokenExp, newRefreshTokenExp } = await refreshAccessToken(req, res)
@@ -193,7 +228,7 @@ class UserController {
   static userProfile = async (req, res) => {
     res.send({ "user": req.user })
   }
-  
+
   // Change Password
   static changeUserPassword = async (req, res) => {
     try {
@@ -301,8 +336,6 @@ class UserController {
     }
   }
 
-
-
   //logout
   static userLogout = async (req, res) => {
     try {
@@ -315,13 +348,13 @@ class UserController {
       );
 
       //clear access token and refresh token cookies
-      res.clearCookie('accesToken');
+      res.clearCookie('accessToken');
       res.clearCookie('refreshToken');
       res.clearCookie('is_auth');
 
       res.status(200).json({ status: "success", message: "Logout successful" });
-      
-    }catch(error){
+
+    } catch (error) {
       logger.error('Error during user logout:', error);
       res.status(500).json({ status: "failed", message: "Unable to logout, please try again later" });
     }
