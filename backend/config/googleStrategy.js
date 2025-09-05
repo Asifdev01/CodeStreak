@@ -11,10 +11,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `/auth/google/callback`
+    callbackURL: `${process.env.BACKEND_URL}/auth/google/callback` // FIXED: Added BACKEND_URL
   },
     async (accessToken, refreshToken, profile, done) => {
-      // logger.info("Profile", profile);
       try {
         // Check if user already exists in the database
         let user = await UserModel.findOne({ email: profile._json.email });

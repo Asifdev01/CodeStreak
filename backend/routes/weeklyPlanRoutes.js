@@ -2,7 +2,7 @@ import express from 'express';
 const router = express.Router();
 import WeeklyPlanController from '../controllers/weeklyPlanController.js';
 import passport from 'passport';
-import accessTokenAutoRefresh from '../middlewares/aceessTokenAutoRefresh.js';
+import accessTokenAutoRefresh from '../middlewares/accessTokenAutoRefresh.js';
 
 /**
  * @swagger

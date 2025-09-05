@@ -2,7 +2,7 @@ import express from 'express';
 const router = express.Router();
 import StreakController from '../controllers/streakController.js';
 import passport from 'passport';
-import accessTokenAutoRefresh from '../middlewares/aceessTokenAutoRefresh.js';
+import accessTokenAutoRefresh from '../middlewares/accessTokenAutoRefresh.js';
 
 // All routes are protected
 router.use(accessTokenAutoRefresh, passport.authenticate('jwt', { session: false }));
